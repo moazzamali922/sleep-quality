@@ -1,190 +1,150 @@
 <?php
 include "db.php";
 
-// ✅ STOP direct access or refresh
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header("Location: index.php");
     exit;
 }
 
-// ✅ Safe POST handling
 $name = $_POST['name'] ?? '';
 $age = $_POST['age'] ?? 0;
 $sleep_time = $_POST['sleep_time'] ?? '';
 $wake_time = $_POST['wake_time'] ?? '';
-$stress = $_POST['stress'] ?? '';
-$noise = $_POST['noise'] ?? '';
+$stress = $_POST['stress'] ?? 'low';
+$noise = $_POST['noise'] ?? 'low';
+$routine = $_POST['routine'] ?? '';
 
-// ✅ Basic validation
 if ($name === '' || $sleep_time === '' || $wake_time === '') {
     header("Location: index.php");
     exit;
 }
 
-// ✅ SAFE SQL (no errors, no injection)
-$stmt = $conn->prepare("
-INSERT INTO users (name, age, sleep_time, wake_time, stress, noise)
-VALUES (?, ?, ?, ?, ?, ?)
-");
-$stmt->bind_param(
-    "sissss",
-    $name,
-    $age,
-    $sleep_time,
-    $wake_time,
-    $stress,
-    $noise
-);
+// Save user data
+$stmt = $conn->prepare("INSERT INTO users (name, age, sleep_time, wake_time, stress, noise, routine) VALUES (?, ?, ?, ?, ?, ?, ?)");
+$stmt->bind_param("sisssss", $name, $age, $sleep_time, $wake_time, $stress, $noise, $routine);
 $stmt->execute();
-
 
 // ---------------- SLEEP CALCULATION ----------------
 $sleepHours = (strtotime($wake_time) - strtotime($sleep_time)) / 3600;
-if ($sleepHours < 0)
-    $sleepHours += 24;
+if ($sleepHours < 0) $sleepHours += 24;
 
 $score = 10;
-$advice = "";
+$adviceArray = [];
 
-// Duration logic
+// Duration
 if ($sleepHours < 6) {
     $score -= 3;
-    $advice .=
-        "Sleep Duration Analysis:
-    You are sleeping only " . round($sleepHours, 1) . " hours, which is significantly below the recommended amount.
-    Adults normally need 7–9 hours of sleep for proper brain function, immunity, and energy.
-    Chronic short sleep can cause fatigue, poor focus, and mood problems.
-    Try sleeping earlier, limit mobile usage before bed, and maintain a fixed sleep schedule.";
+    $adviceArray[] = "Sleep Duration Analysis: You are sleeping only " . round($sleepHours,1) . " hours. Try sleeping earlier and maintain a fixed schedule.";
 } elseif ($sleepHours < 7) {
     $score -= 1;
-    $advice .=
-        "Sleep Duration Analysis:
-    Your sleep duration is slightly below ideal.
-    Increasing your sleep by 30–60 minutes can improve concentration and daily performance.
-    Going to bed a little earlier consistently will help.";
+    $adviceArray[] = "Sleep Duration Analysis: Your sleep duration is slightly below ideal. Consider sleeping 30–60 min longer.";
 } else {
-    $advice .=
-        "Sleep Duration Analysis:
-    Good sleep duration detected.
-    You're getting enough rest to support mental and physical health.
-    Keep maintaining this healthy sleep routine.";
+    $adviceArray[] = "Sleep Duration Analysis: Good sleep duration detected.";
 }
 
-// Stress logic
+// Stress
 if ($stress === "high") {
     $score -= 3;
-    $advice .=
-        "Stress Level Analysis:
-    High stress severely affects sleep quality and reduces deep sleep stages.
-    Stress hormones keep your brain active even during sleep.
-    Try meditation, deep breathing, calming music, or journaling before bedtime.
-    Managing stress can greatly improve sleep quality.";
+    $adviceArray[] = "Stress Level Analysis: High stress affects sleep. Try meditation or journaling.";
 } elseif ($stress === "medium") {
     $score -= 1;
-    $advice .=
-        "Stress Level Analysis:
-    Moderate stress detected.
-    While it may not fully disrupt sleep, it can reduce sleep depth.
-    Light exercise, reading, or relaxation techniques before bed can help.";
+    $adviceArray[] = "Stress Level Analysis: Moderate stress detected. Relaxation before bed can help.";
 } else {
-    $advice .=
-        "Stress Level Analysis:
-    Low stress level detected.
-    This is ideal for achieving deep and restful sleep.
-    Keep following stress-free routines before bedtime.";
+    $adviceArray[] = "Stress Level Analysis: Low stress level detected. Ideal for deep sleep.";
 }
 
-// Noise logic
+// Noise
 if ($noise === "high") {
     $score -= 2;
-    $advice .=
-        "Environmental Noise Analysis:
-    High noise levels can wake you up multiple times during the night and prevent deep sleep.
-    Continuous noise exposure may lead to sleep fragmentation.
-    Consider earplugs, closing windows, or using white noise for better sleep quality.";
+    $adviceArray[] = "Environmental Noise Analysis: High noise affects sleep. Use earplugs or white noise.";
 } elseif ($noise === "medium") {
     $score -= 1;
-    $advice .=
-        "Environmental Noise Analysis:
-    Medium noise levels may slightly reduce sleep quality.
-    Try minimizing background sounds or improving room insulation for better rest.";
+    $adviceArray[] = "Environmental Noise Analysis: Medium noise may slightly reduce sleep quality.";
 } else {
-    $advice .=
-        "Environmental Noise Analysis:
-    Quiet environment detected.
-    This supports uninterrupted and high-quality sleep.
-    Your sleep environment is well optimized.";
+    $adviceArray[] = "Environmental Noise Analysis: Quiet environment detected. Good for sleep.";
 }
 
+// Recommendations
+$recommendations = [
+    "Maintain a consistent sleep schedule.",
+    "Reduce screen time before bed.",
+    "Practice relaxation techniques like meditation.",
+    "Keep your bedroom quiet, dark, and cool.",
+    "Avoid caffeine and heavy meals before bedtime."
+];
 
-// ✅ Clamp score
-if ($score < 0)
-    $score = 0;
-if ($score > 10)
-    $score = 10;
+// Clamp score
+$score = max(0, min(10, $score));
 
-// ✅ Color logic
-$color = "#4facfe";
+// Score color
 if ($score <= 4) {
-    $color = "#ff6b6b";
+    $color = "#ff6b6b"; // red
+    $sleepLevel = "Poor";
 } elseif ($score <= 7) {
-    $color = "#feca57";
+    $color = "#feca57"; // yellow
+    $sleepLevel = "Average";
+} else {
+    $color = "#2ecc71"; // green
+    $sleepLevel = "Excellent";
 }
 
-$dash = ($score / 10) * 251;
+// SVG calculation
+$radius = 70;
+$circumference = 2 * pi() * $radius;
+$dashOffset = $circumference * (1 - $score / 10);
 ?>
 
 <!DOCTYPE html>
 <html>
 
 <head>
-    <title>Sleep Report</title>
-
+    <title>Sleep Quality Certificate</title>
     <style>
         body {
             margin: 0;
-            height: 100vh;
             font-family: 'Segoe UI', sans-serif;
-            background: url('assets/img/sleeep_2.jpg') no-repeat center center / cover;
+            background: linear-gradient(135deg, #6dd5ed, #2193b0);
             display: flex;
-            align-items: center;
             justify-content: center;
+            align-items: center;
+            min-height: 100vh;
         }
 
-        .overlay {
-            position: absolute;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.55);
-        }
-
-        .card {
-            position: relative;
-            width: 600px;
-            padding: 35px 30px;
-            border-radius: 18px;
-            background: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(12px);
-            color: #fff;
+        .certificate {
+            background: #fff;
+            color: #333;
+            width: 750px;
+            border-radius: 20px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+            padding: 40px;
             text-align: center;
-            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.45);
+            position: relative;
         }
 
-        h2 {
-            margin-bottom: 8px;
-            font-weight: 600;
+        .certificate-header {
+            background: #4facfe;
+            background: linear-gradient(to right, #43e97b, #38f9d7);
+            border-radius: 15px 15px 0 0;
+            padding: 20px;
+            color: white;
         }
 
-        .sub {
-            opacity: .85;
-            font-size: 14px;
-            margin-bottom: 25px;
+        .certificate-header h1 {
+            margin: 0;
+            font-size: 28px;
+        }
+
+        .certificate-header h3 {
+            margin: 5px 0 0;
+            font-weight: normal;
+            opacity: 0.85;
         }
 
         .score-box {
             position: relative;
-            width: 170px;
-            height: 170px;
-            margin: 0 auto 25px;
+            width: 180px;
+            height: 180px;
+            margin: 25px auto;
         }
 
         svg {
@@ -193,28 +153,24 @@ $dash = ($score / 10) * 251;
 
         circle {
             fill: none;
-            stroke-width: 12;
+            stroke-width: 14;
             stroke-linecap: round;
         }
 
         .bg {
-            stroke: rgba(255, 255, 255, 0.2);
+            stroke: rgba(0,0,0,0.1);
         }
 
         .progress {
-            stroke:
-                <?php echo $color; ?>
-            ;
-            stroke-dasharray: 251;
-            stroke-dashoffset: calc(251 -
-                    <?php echo $dash; ?>
-                );
-            animation: fill 1.5s ease;
+            stroke: <?= $color ?>;
+            stroke-dasharray: <?= $circumference ?>;
+            stroke-dashoffset: <?= $circumference ?>;
+            animation: fill 1.5s forwards;
         }
 
         @keyframes fill {
-            from {
-                stroke-dashoffset: 251;
+            to {
+                stroke-dashoffset: <?= $dashOffset ?>;
             }
         }
 
@@ -222,40 +178,93 @@ $dash = ($score / 10) * 251;
             position: absolute;
             inset: 0;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             font-size: 22px;
             font-weight: bold;
         }
 
-        .advice {
-            font-size: 15px;
+        .score-text span {
+            font-size: 16px;
+            opacity: 0.8;
+            margin-top: 5px;
+        }
+
+        .section {
+            text-align: left;
+            margin: 20px 0;
+        }
+
+        .section h4 {
+            font-size: 20px;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+
+        .section ul {
+            margin-left: 20px;
             line-height: 1.6;
-            opacity: .95;
+        }
+
+        .analysis p {
+            margin: 8px 0;
+        }
+
+        .important-note {
+            margin-top: 25px;
+            background: #ffe6e6;
+            color: #c00;
+            padding: 15px;
+            border-left: 6px solid #c00;
+            font-size: 14px;
+        }
+
+        @media(max-width:780px){
+            .certificate{width:95%;padding:30px;}
+            .score-box{width:150px;height:150px;}
         }
     </style>
-
 </head>
 
 <body>
-
-    <div class="overlay"></div>
-
-    <div class="card">
-        <h2><?php echo htmlspecialchars($name); ?>'s Sleep Report</h2>
-        <div class="sub">Overall Sleep Quality Score</div>
-
-        <div class="score-box">
-            <svg width="170" height="170">
-                <circle class="bg" cx="85" cy="85" r="40" />
-                <circle class="progress" cx="85" cy="85" r="40" />
-            </svg>
-            <div class="score-text"><?php echo $score; ?>/10</div>
+    <div class="certificate">
+        <div class="certificate-header">
+            <h1>Certified Sleep Quality Report</h1>
+            <h3><?= htmlspecialchars($name) ?>, Age <?= $age ?></h3>
         </div>
 
-        <div class="advice"><?php echo htmlspecialchars($advice); ?></div>
+        <div class="score-box">
+            <svg width="180" height="180">
+                <circle class="bg" cx="90" cy="90" r="<?= $radius ?>" />
+                <circle class="progress" cx="90" cy="90" r="<?= $radius ?>" />
+            </svg>
+            <div class="score-text">
+                <?= $score ?>/10
+                <span><?= $sleepLevel ?></span>
+            </div>
+        </div>
+
+        <div class="section">
+            <h4>Recommendations to Improve Sleep</h4>
+            <ul>
+                <?php foreach($recommendations as $rec): ?>
+                    <li><?= htmlspecialchars($rec) ?></li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+
+        <div class="section analysis">
+            <h4>Analysis Details</h4>
+            <?php foreach ($adviceArray as $line): ?>
+                <p><?= htmlspecialchars($line) ?></p>
+            <?php endforeach; ?>
+        </div>
+
+        <div class="important-note">
+            <strong>Important:</strong> This report is for guidance only. If you experience persistent sleep problems, consult a doctor or sleep specialist.
+        </div>
     </div>
-
 </body>
-
 </html>
